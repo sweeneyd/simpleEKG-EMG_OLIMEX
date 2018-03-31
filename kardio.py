@@ -50,7 +50,9 @@ class Ui_Kardio(object):
         self.MAX_VOLTAGE = 5.0
         self.indices = []
         self.recorded_data = []
-        
+        self.SAMPLING_RATE = 100 # Sampling rate of serial data (100 Hz)
+        self.savefilepath = self.getNextFile()
+
     def setupUi(self, Kardio):
         Kardio.setObjectName("Kardio")
         Kardio.resize(800, 600)
@@ -111,10 +113,11 @@ class Ui_Kardio(object):
         self.plainTextEdit.setGeometry(QtCore.QRect(240, 22, 221, 25))
         self.plainTextEdit.setObjectName("plainTextEdit")
         self.plainTextEdit.overwriteMode()
+        self.plainTextEdit.insertPlainText(self.savefilepath)
         self.pushButton_3 = QtWidgets.QPushButton(self.groupBox_3)
         self.pushButton_3.setGeometry(QtCore.QRect(120, 20, 113, 32))
         self.pushButton_3.setObjectName("pushButton_3")
-        self.pushButton_3.setStyleSheet('color: green;}')    
+        self.pushButton_3.setStyleSheet('color: green;}')
         Kardio.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(Kardio)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 22))
@@ -129,18 +132,12 @@ class Ui_Kardio(object):
 
         self.retranslateUi(Kardio)
         QtCore.QMetaObject.connectSlotsByName(Kardio)
-        
+
         self.pushButton.clicked.connect(self.serialConnect)
         self.comboBox.activated.connect(self.serialFind)
         self.pushButton_2.clicked.connect(self.readData)
-        
+
         self.pushButton_3.clicked.connect(self.recordData)
-        
-        savefilepath = self.getNextFile()
-        self.plainTextEdit.insertPlainText(savefilepath)
-        
-        
-        self.SAMPLING_RATE = 100 # Sampling rate of serial data (100 Hz)
 
     def getNextFile(self):
         files = glob.glob(os.curdir + '/rawData_%s_[^0-9]*.dat'%datetime.date.today())
@@ -163,18 +160,18 @@ class Ui_Kardio(object):
         self.menuSettings.setTitle(_translate("Kardio", "Settings"))
         if self.CONNECTED == False:
             self.serialFind()
-        
+
     def serialFind(self):
         # Delete all items in ports list
         items = [self.comboBox.itemText(i) for i in range(self.comboBox.count())]
         for i in range(len(items)):
-            
+
             self.comboBox.removeItem(i)
         # Add back available items to ports list
         ports = serial_ports()
         self.comboBox.addItems(ports)
         return False
-    
+
     def serialConnect(self, baud=9600):
         _translate = QtCore.QCoreApplication.translate
         if self.CONNECTED == False:
@@ -193,7 +190,7 @@ class Ui_Kardio(object):
             self.CONNECTED = False
             self.comboBox.setEnabled(True)
         return False
-    
+
     def recordData(self):
         _translate = QtCore.QCoreApplication.translate
         if len(self.recorded_data) != 0 and self.RECORD == True:
@@ -204,28 +201,28 @@ class Ui_Kardio(object):
             savefilepath = self.getNextFile()
             self.plainTextEdit.clear()
             self.plainTextEdit.insertPlainText(savefilepath)
-          
+
         elif self.READING == True:
             self.pushButton_3.setText(_translate("Kardio", "Record"))
             self.pushButton_3.setStyleSheet('color: green;}')
             self.RECORD = True
-            
+
         # Clear recording buffer
         self.recorded_data = []
         return False
-    
+
     def writeData(self):
         with open(self.plainTextEdit.toPlainText(), 'w') as datafile:
             # Write header w/ settings
             datafile.write('###\n')
             datafile.write('# OLIMEX SHIELD-EKG-EMG Data Recording\n')
             datafile.write('# Writtent by: Daniel C. Sweeney (v0.1)\n')
-            datafile.write('# Filename: %s\n'%self.plainTextEdit.toPlainText()) 
-            datafile.write('# Sampling Rate: %s Hz\n'%self.SAMPLING_RATE) 
+            datafile.write('# Filename: %s\n'%self.plainTextEdit.toPlainText())
+            datafile.write('# Sampling Rate: %s Hz\n'%self.SAMPLING_RATE)
             datafile.write('# No. Samples: %s\n'%len(self.recorded_data))
             datafile.write('# Date: %s\n'%(datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
             datafile.write('###\n')
-            
+
             # Write data
             for i in self.recorded_data:
                 datafile.write('%s\n'%i)
@@ -238,8 +235,8 @@ class Ui_Kardio(object):
             if self.RECORD == True:
                 self.recorded_data.append(self.data[-1])
             self.data.pop(0)
-        times = np.linspace(0, 
-                            len(self.data)/self.SAMPLING_RATE, 
+        times = np.linspace(0,
+                            len(self.data)/self.SAMPLING_RATE,
                             len(self.data))
         xdata = np.array(self.data, dtype='float64')
         self.curve.setData(times, xdata)
@@ -247,7 +244,7 @@ class Ui_Kardio(object):
         if self.READING == True:
             self.peakDetection()
         return False
-    
+
     def readData(self):
         _translate = QtCore.QCoreApplication.translate
         if self.READING == False:
@@ -263,26 +260,25 @@ class Ui_Kardio(object):
             self.pushButton_2.setText(_translate("Kardio", "Stop"))
             self.pushButton_2.setStyleSheet('color: red;}')
             self.plainTextEdit.setEnabled(False)
-            
+
         else:
             self.timer.stop()
             self.READING = False
             self.pushButton_2.setText(_translate("Kardio", "Start"))
             self.pushButton_2.setStyleSheet('color: green;}')
-            self.plainTextEdit.setEnabled(False)
+            self.plainTextEdit.setEnabled(True)
         return False
-    
+
     def peakDetection(self):
         _translate = QtCore.QCoreApplication.translate
         offset = np.mean(self.data)
         data_norm = np.divide(self.data, self.MAX_VOLTAGE)
-        self.indices.append(len(peakutils.indexes(data_norm, 
-                                              thres=0.75, 
+        self.indices.append(len(peakutils.indexes(data_norm,
+                                              thres=0.75,
                                               min_dist=0.01)))
         if len(self.indices) > 500:
             self.indices.pop(0)
         bpm = np.mean(self.indices)*self.SAMPLING_RATE/(len(self.data)/60.0)
-        print(bpm)
         self.BPM_counter.setText(_translate("Kardio", '%3.0f'%bpm))
         return False
 
@@ -294,4 +290,3 @@ if __name__ == "__main__":
     ui.setupUi(Kardio)
     Kardio.show()
     sys.exit(app.exec_())
-
